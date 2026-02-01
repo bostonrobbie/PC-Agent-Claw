@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Screenshots (may contain sensitive info)
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Sensitive data
+*.json
+*.env
+.env
+secrets/
+credentials/
+
+# Logs
+*.log
+logs/
+
+# Backups (too large)
+backups/
+
+# Large model files
+*.bin
+*.gguf
+models/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+*.tmp
