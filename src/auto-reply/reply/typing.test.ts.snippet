@@ -1,0 +1,21 @@
+
+  it("triggers onTimeout when ttl expires", () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const controller = createTypingController({
+      typingIntervalSeconds: 1,
+      typingTtlMs: 5000,
+      onTimeout,
+    });
+
+    controller.onReplyStart();
+    vi.advanceTimersByTime(2000);
+    controller.refreshTypingTtl(); // Resets timer
+    vi.advanceTimersByTime(4000);
+    expect(onTimeout).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(2000); // 4000 + 2000 = 6000 > 5000
+    expect(onTimeout).toHaveBeenCalledWith(5000);
+    expect(controller.isActive()).toBe(false);
+    vi.useRealTimers();
+  });

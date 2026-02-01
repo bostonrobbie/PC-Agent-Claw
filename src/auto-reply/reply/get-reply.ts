@@ -50,10 +50,10 @@ export async function getReplyFromConfig(
     const heartbeatRaw = agentCfg?.heartbeat?.model?.trim() ?? "";
     const heartbeatRef = heartbeatRaw
       ? resolveModelRefFromString({
-          raw: heartbeatRaw,
-          defaultProvider,
-          aliasIndex,
-        })
+        raw: heartbeatRaw,
+        defaultProvider,
+        aliasIndex,
+      })
       : null;
     if (heartbeatRef) {
       provider = heartbeatRef.ref.provider;
@@ -73,11 +73,18 @@ export async function getReplyFromConfig(
     agentCfg?.typingIntervalSeconds ?? sessionCfg?.typingIntervalSeconds;
   const typingIntervalSeconds =
     typeof configuredTypingSeconds === "number" ? configuredTypingSeconds : 6;
+  const configuredTypingTtl = agentCfg?.typingTtlMs;
   const typing = createTypingController({
     onReplyStart: opts?.onReplyStart,
     typingIntervalSeconds,
+    typingTtlMs: configuredTypingTtl,
     silentToken: SILENT_REPLY_TOKEN,
     log: defaultRuntime.log,
+    onTimeout: (ms) => {
+      defaultRuntime.log(
+        `Typing timeout reached (${ms}ms) for session ${agentSessionKey || "unknown"}`,
+      );
+    },
   });
   opts?.onTypingController?.(typing);
 

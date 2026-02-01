@@ -13,6 +13,7 @@ export type TypingController = {
 
 export function createTypingController(params: {
   onReplyStart?: () => Promise<void> | void;
+  onTimeout?: (ms: number) => void;
   typingIntervalSeconds?: number;
   typingTtlMs?: number;
   silentToken?: string;
@@ -20,8 +21,9 @@ export function createTypingController(params: {
 }): TypingController {
   const {
     onReplyStart,
+    onTimeout,
     typingIntervalSeconds = 6,
-    typingTtlMs = 2 * 60_000,
+    typingTtlMs = 10 * 60_000,
     silentToken = SILENT_REPLY_TOKEN,
     log,
   } = params;
@@ -72,6 +74,7 @@ export function createTypingController(params: {
     }
     typingTtlTimer = setTimeout(() => {
       if (!typingTimer) return;
+      onTimeout?.(typingTtlMs);
       log?.(`typing TTL reached (${formatTypingTtl(typingTtlMs)}); stopping typing indicator`);
       cleanup();
     }, typingTtlMs);

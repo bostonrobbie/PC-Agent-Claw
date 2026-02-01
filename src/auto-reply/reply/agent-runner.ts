@@ -41,6 +41,7 @@ import { incrementCompactionCount } from "./session-updates.js";
 import type { TypingController } from "./typing.js";
 import { createTypingSignaler } from "./typing-mode.js";
 import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
+import { logChatInteraction } from "../../logging/chat-logger.js";
 
 const BLOCK_REPLY_SEND_TIMEOUT_MS = 15_000;
 
@@ -142,20 +143,20 @@ export async function runReplyAgent(params: {
   const blockReplyCoalescing =
     blockStreamingEnabled && opts?.onBlockReply
       ? resolveBlockStreamingCoalescing(
-          cfg,
-          sessionCtx.Provider,
-          sessionCtx.AccountId,
-          blockReplyChunking,
-        )
+        cfg,
+        sessionCtx.Provider,
+        sessionCtx.AccountId,
+        blockReplyChunking,
+      )
       : undefined;
   const blockReplyPipeline =
     blockStreamingEnabled && opts?.onBlockReply
       ? createBlockReplyPipeline({
-          onBlockReply: opts.onBlockReply,
-          timeoutMs: blockReplyTimeoutMs,
-          coalescing: blockReplyCoalescing,
-          buffer: createAudioAsVoiceBuffer({ isAudioPayload }),
-        })
+        onBlockReply: opts.onBlockReply,
+        timeoutMs: blockReplyTimeoutMs,
+        coalescing: blockReplyCoalescing,
+        buffer: createAudioAsVoiceBuffer({ isAudioPayload }),
+      })
       : null;
 
   if (shouldSteer && isStreaming) {
@@ -455,6 +456,34 @@ export async function runReplyAgent(params: {
       });
     }
 
+    // Persist chat log
+    if (hasNonzeroUsage(usage) || payloadArray.length > 0) {
+      const replyText = payloadArray.map((p) => p.text).filter(Boolean).join("\n");
+      const costUsd = estimateUsageCost({
+        usage: usage || {},
+        cost: resolveModelCostConfig({ provider: providerUsed, model: modelUsed, config: cfg })
+      });
+
+      logChatInteraction({
+        ts: new Date().toISOString(),
+        sessionKey,
+        sessionId: followupRun.run.sessionId,
+        provider: providerUsed,
+        model: modelUsed,
+        input: commandBody,
+        output: replyText,
+        usage: {
+          input: usage?.input,
+          output: usage?.output,
+          total: usage?.total,
+          cacheRead: usage?.cacheRead,
+          cacheWrite: usage?.cacheWrite,
+        },
+        durationMs: Date.now() - runStartedAt,
+        costUsd,
+      });
+    }
+
     const responseUsageRaw =
       activeSessionEntry?.responseUsage ??
       (sessionKey ? activeSessionStore?.[sessionKey]?.responseUsage : undefined);
@@ -464,10 +493,10 @@ export async function runReplyAgent(params: {
       const showCost = authMode === "api-key";
       const costConfig = showCost
         ? resolveModelCostConfig({
-            provider: providerUsed,
-            model: modelUsed,
-            config: cfg,
-          })
+          provider: providerUsed,
+          model: modelUsed,
+          config: cfg,
+        })
         : undefined;
       let formatted = formatResponseUsageLine({
         usage,

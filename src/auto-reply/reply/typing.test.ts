@@ -11,7 +11,7 @@ describe("typing controller", () => {
 
   it("stops after run completion and dispatcher idle", async () => {
     vi.useFakeTimers();
-    const onReplyStart = vi.fn(async () => {});
+    const onReplyStart = vi.fn(async () => { });
     const typing = createTypingController({
       onReplyStart,
       typingIntervalSeconds: 1,
@@ -35,7 +35,7 @@ describe("typing controller", () => {
 
   it("keeps typing until both idle and run completion are set", async () => {
     vi.useFakeTimers();
-    const onReplyStart = vi.fn(async () => {});
+    const onReplyStart = vi.fn(async () => { });
     const typing = createTypingController({
       onReplyStart,
       typingIntervalSeconds: 1,
@@ -56,7 +56,7 @@ describe("typing controller", () => {
 
   it("does not start typing after run completion", async () => {
     vi.useFakeTimers();
-    const onReplyStart = vi.fn(async () => {});
+    const onReplyStart = vi.fn(async () => { });
     const typing = createTypingController({
       onReplyStart,
       typingIntervalSeconds: 1,
@@ -71,7 +71,7 @@ describe("typing controller", () => {
 
   it("does not restart typing after it has stopped", async () => {
     vi.useFakeTimers();
-    const onReplyStart = vi.fn(async () => {});
+    const onReplyStart = vi.fn(async () => { });
     const typing = createTypingController({
       onReplyStart,
       typingIntervalSeconds: 1,
@@ -91,6 +91,27 @@ describe("typing controller", () => {
     await typing.startTypingOnText("late tool result");
     vi.advanceTimersByTime(5_000);
     expect(onReplyStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("triggers onTimeout when ttl expires", async () => {
+    vi.useFakeTimers();
+    const onTimeout = vi.fn();
+    const controller = createTypingController({
+      onReplyStart: vi.fn(),
+      typingIntervalSeconds: 1,
+      typingTtlMs: 5000,
+      onTimeout,
+    });
+
+    await controller.startTypingLoop();
+    vi.advanceTimersByTime(2000);
+    controller.refreshTypingTtl(); // Resets timer
+    vi.advanceTimersByTime(4000);
+    expect(onTimeout).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(2000); // 4000 + 2000 = 6000 > 5000
+    expect(onTimeout).toHaveBeenCalledWith(5000);
+    expect(controller.isActive()).toBe(false);
   });
 });
 
