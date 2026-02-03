@@ -1,0 +1,517 @@
+#!/usr/bin/env python3
+"""
+AI-Powered SOP Generator (Local - No API Key Required)
+Uses Claude Code CLI or free LLMs to generate SOPs
+"""
+import sys
+from pathlib import Path
+import subprocess
+import json
+from typing import Dict, List, Optional
+import tempfile
+
+sys.path.append(str(Path(__file__).parent.parent))
+
+from business.sop_manager import SOPManager
+
+
+class SOPGeneratorLocal:
+    """
+    Generate SOPs using local AI (Claude Code CLI or free LLMs)
+
+    Features:
+    - Generate SOP from natural language description
+    - Extract steps automatically
+    - Identify automation opportunities
+    - Suggest improvements to existing SOPs
+    - NO API KEY REQUIRED - uses Claude Code CLI
+    """
+
+    def __init__(self):
+        self.sop_manager = SOPManager()
+        self.use_claude_code = self._check_claude_code_available()
+
+    def _check_claude_code_available(self) -> bool:
+        """Check if Claude Code CLI is available"""
+        try:
+            result = subprocess.run(
+                ['claude', '--version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            return result.returncode == 0
+        except:
+            return False
+
+    def generate_sop_from_description(self, description: str,
+                                     function_name: str = "General") -> Dict:
+        """
+        Generate complete SOP from natural language description
+
+        Args:
+            description: What the process does
+            function_name: Business function
+
+        Returns:
+            Generated SOP structure
+        """
+        if self.use_claude_code:
+            return self._generate_with_claude_code(description, function_name)
+        else:
+            print("[INFO] Claude Code CLI not found, using template-based generation")
+            return self._generate_mock_sop(description)
+
+    def _generate_with_claude_code(self, description: str, function_name: str) -> Dict:
+        """Generate SOP using Claude Code CLI"""
+        prompt = f"""Generate a detailed Standard Operating Procedure (SOP) for the following process:
+
+{description}
+
+Please provide a JSON response with the following structure:
+{{
+  "sop_code": "SOP-XXX-001",
+  "title": "Brief title",
+  "description": "Detailed description",
+  "purpose": "Why this SOP exists",
+  "scope": "What this SOP covers",
+  "steps": [
+    {{
+      "step_number": 1,
+      "title": "Step title",
+      "description": "Detailed step description",
+      "type": "manual" or "automated",
+      "estimated_duration": minutes,
+      "checklist": ["item1", "item2"],
+      "automation_potential": "high/medium/low"
+    }}
+  ],
+  "frequency": "daily/weekly/monthly/as-needed",
+  "estimated_duration": total_minutes
+}}
+
+Make it practical, detailed, and actionable. Return ONLY the JSON, no other text."""
+
+        try:
+            # Create temp file with prompt
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                f.write(prompt)
+                prompt_file = f.name
+
+            # Call Claude Code CLI
+            result = subprocess.run(
+                ['claude', 'chat', '--file', prompt_file],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+
+            # Clean up temp file
+            Path(prompt_file).unlink()
+
+            if result.returncode == 0:
+                response_text = result.stdout
+
+                # Extract JSON from response
+                start = response_text.find('{')
+                end = response_text.rfind('}') + 1
+
+                if start != -1 and end != 0:
+                    sop_data = json.loads(response_text[start:end])
+                    return sop_data
+                else:
+                    print("[ERROR] Could not parse JSON from Claude Code response")
+                    return self._generate_mock_sop(description)
+            else:
+                print(f"[ERROR] Claude Code failed: {result.stderr}")
+                return self._generate_mock_sop(description)
+
+        except Exception as e:
+            print(f"[ERROR] AI generation failed: {e}")
+            return self._generate_mock_sop(description)
+
+    def create_sop_in_database(self, sop_data: Dict, function_id: int) -> int:
+        """
+        Create SOP in database from generated data
+
+        Args:
+            sop_data: Generated SOP structure
+            function_id: Business function ID
+
+        Returns:
+            Created SOP ID
+        """
+        # Create SOP
+        sop_id = self.sop_manager.create_sop(
+            sop_data['sop_code'],
+            sop_data['title'],
+            function_id,
+            description=sop_data.get('description'),
+            purpose=sop_data.get('purpose'),
+            scope=sop_data.get('scope'),
+            frequency=sop_data.get('frequency'),
+            estimated_duration=sop_data.get('estimated_duration')
+        )
+
+        # Add steps
+        for step in sop_data.get('steps', []):
+            step_id = self.sop_manager.add_step(
+                sop_id,
+                step['step_number'],
+                step['title'],
+                step['description'],
+                step_type=step.get('type', 'manual'),
+                estimated_duration=step.get('estimated_duration')
+            )
+
+            # Add checklist items
+            for item in step.get('checklist', []):
+                self.sop_manager.add_checklist_item(step_id, item)
+
+        return sop_id
+
+    def suggest_improvements(self, sop_id: int) -> List[Dict]:
+        """
+        Analyze existing SOP and suggest improvements
+
+        Args:
+            sop_id: SOP to analyze
+
+        Returns:
+            List of improvement suggestions
+        """
+        if not self.use_claude_code:
+            return self._mock_improvements()
+
+        # Get SOP data
+        sop = self.sop_manager.get_sop(sop_id)
+        steps = self.sop_manager.get_steps(sop_id)
+
+        prompt = f"""Analyze this Standard Operating Procedure and suggest improvements:
+
+SOP: {sop['sop_title']}
+Description: {sop.get('description', 'N/A')}
+
+Steps:
+"""
+        for step in steps:
+            prompt += f"\n{step['step_number']}. {step['step_title']} ({step['step_type']})"
+            prompt += f"\n   {step['description']}"
+
+        prompt += """
+
+Please provide improvement suggestions in JSON format:
+[
+  {
+    "type": "automation/efficiency/clarity/safety",
+    "priority": "high/medium/low",
+    "step_number": affected_step_or_null,
+    "suggestion": "Specific improvement",
+    "rationale": "Why this helps",
+    "impact": "Expected benefit"
+  }
+]
+
+Return ONLY the JSON array, no other text."""
+
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                f.write(prompt)
+                prompt_file = f.name
+
+            result = subprocess.run(
+                ['claude', 'chat', '--file', prompt_file],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+
+            Path(prompt_file).unlink()
+
+            if result.returncode == 0:
+                response_text = result.stdout
+                start = response_text.find('[')
+                end = response_text.rfind(']') + 1
+
+                if start != -1 and end != 0:
+                    return json.loads(response_text[start:end])
+                else:
+                    return self._mock_improvements()
+            else:
+                return self._mock_improvements()
+
+        except Exception as e:
+            print(f"[ERROR] AI analysis failed: {e}")
+            return self._mock_improvements()
+
+    def identify_automation_opportunities(self, sop_id: int) -> List[Dict]:
+        """
+        Identify which steps can be automated
+
+        Args:
+            sop_id: SOP to analyze
+
+        Returns:
+            Automation opportunities
+        """
+        steps = self.sop_manager.get_steps(sop_id)
+
+        opportunities = []
+        for step in steps:
+            if step['step_type'] == 'manual':
+                # Analyze if automatable
+                automation_score = self._calculate_automation_score(step)
+
+                if automation_score > 0.5:
+                    opportunities.append({
+                        'step_number': step['step_number'],
+                        'step_title': step['step_title'],
+                        'automation_score': automation_score,
+                        'suggested_approach': self._suggest_automation_approach(step),
+                        'estimated_effort': self._estimate_automation_effort(automation_score)
+                    })
+
+        return sorted(opportunities, key=lambda x: x['automation_score'], reverse=True)
+
+    def _calculate_automation_score(self, step: Dict) -> float:
+        """Calculate how suitable a step is for automation (0-1)"""
+        score = 0.0
+
+        description = (step['description'] or '').lower()
+
+        # Keywords indicating automation potential
+        automation_keywords = [
+            'calculate', 'compute', 'send', 'email', 'check', 'verify',
+            'validate', 'process', 'generate', 'create', 'update', 'fetch',
+            'retrieve', 'store', 'save', 'record', 'notify', 'alert'
+        ]
+
+        manual_keywords = [
+            'review', 'approve', 'decide', 'judge', 'meet', 'discuss',
+            'negotiate', 'call', 'interview', 'inspect', 'examine'
+        ]
+
+        for keyword in automation_keywords:
+            if keyword in description:
+                score += 0.15
+
+        for keyword in manual_keywords:
+            if keyword in description:
+                score -= 0.2
+
+        return max(0.0, min(1.0, score))
+
+    def _suggest_automation_approach(self, step: Dict) -> str:
+        """Suggest how to automate this step"""
+        description = (step['description'] or '').lower()
+
+        if 'email' in description or 'notify' in description:
+            return "Email/notification automation"
+        elif 'calculate' in description or 'compute' in description:
+            return "Calculation script"
+        elif 'validate' in description or 'check' in description:
+            return "Validation rules"
+        elif 'generate' in description or 'create' in description:
+            return "Template-based generation"
+        else:
+            return "Custom automation handler"
+
+    def _estimate_automation_effort(self, automation_score: float) -> str:
+        """Estimate effort to automate"""
+        if automation_score > 0.8:
+            return "Low (1-2 days)"
+        elif automation_score > 0.6:
+            return "Medium (3-5 days)"
+        else:
+            return "High (1-2 weeks)"
+
+    def _generate_mock_sop(self, description: str) -> Dict:
+        """Generate template-based SOP when AI is unavailable"""
+        # Parse description for keywords to make it smarter
+        desc_lower = description.lower()
+
+        # Determine process type
+        if 'customer' in desc_lower or 'client' in desc_lower:
+            process_type = "customer"
+        elif 'order' in desc_lower or 'purchase' in desc_lower:
+            process_type = "order"
+        elif 'employee' in desc_lower or 'staff' in desc_lower:
+            process_type = "employee"
+        else:
+            process_type = "general"
+
+        # Generate appropriate steps based on type
+        if process_type == "customer":
+            steps = [
+                {
+                    "step_number": 1,
+                    "title": "Verify Customer Information",
+                    "description": "Confirm customer identity and contact details",
+                    "type": "manual",
+                    "estimated_duration": 5,
+                    "checklist": ["Check ID", "Verify email", "Confirm phone"],
+                    "automation_potential": "medium"
+                },
+                {
+                    "step_number": 2,
+                    "title": "Process Customer Request",
+                    "description": "Handle the customer's specific needs",
+                    "type": "manual",
+                    "estimated_duration": 15,
+                    "checklist": ["Document request", "Check eligibility", "Obtain approvals"],
+                    "automation_potential": "high"
+                },
+                {
+                    "step_number": 3,
+                    "title": "Send Confirmation",
+                    "description": "Notify customer of completion",
+                    "type": "automated",
+                    "estimated_duration": 1,
+                    "checklist": ["Generate confirmation", "Send email"],
+                    "automation_potential": "high"
+                }
+            ]
+        elif process_type == "order":
+            steps = [
+                {
+                    "step_number": 1,
+                    "title": "Receive Order",
+                    "description": "Capture order details and validate",
+                    "type": "automated",
+                    "estimated_duration": 2,
+                    "checklist": ["Validate order data", "Check inventory"],
+                    "automation_potential": "high"
+                },
+                {
+                    "step_number": 2,
+                    "title": "Process Payment",
+                    "description": "Handle payment and confirm",
+                    "type": "automated",
+                    "estimated_duration": 3,
+                    "checklist": ["Verify payment method", "Process transaction"],
+                    "automation_potential": "high"
+                },
+                {
+                    "step_number": 3,
+                    "title": "Fulfill Order",
+                    "description": "Prepare and ship order",
+                    "type": "manual",
+                    "estimated_duration": 20,
+                    "checklist": ["Pick items", "Pack order", "Generate label"],
+                    "automation_potential": "medium"
+                }
+            ]
+        else:
+            steps = [
+                {
+                    "step_number": 1,
+                    "title": "Initialize Process",
+                    "description": "Set up and prepare",
+                    "type": "manual",
+                    "estimated_duration": 5,
+                    "checklist": ["Verify requirements", "Gather materials"],
+                    "automation_potential": "medium"
+                },
+                {
+                    "step_number": 2,
+                    "title": "Execute Main Task",
+                    "description": "Perform the core operation",
+                    "type": "manual",
+                    "estimated_duration": 15,
+                    "checklist": ["Follow procedure", "Document results"],
+                    "automation_potential": "high"
+                },
+                {
+                    "step_number": 3,
+                    "title": "Verify and Complete",
+                    "description": "Check results and finalize",
+                    "type": "manual",
+                    "estimated_duration": 5,
+                    "checklist": ["Verify output", "Update records"],
+                    "automation_potential": "low"
+                }
+            ]
+
+        total_duration = sum(s['estimated_duration'] for s in steps)
+
+        return {
+            "sop_code": "SOP-GEN-001",
+            "title": f"Generated Process - {process_type.title()}",
+            "description": description,
+            "purpose": "Auto-generated SOP from description",
+            "scope": f"{process_type.title()} process operations",
+            "steps": steps,
+            "frequency": "as-needed",
+            "estimated_duration": total_duration
+        }
+
+    def _mock_improvements(self) -> List[Dict]:
+        """Mock improvements when AI unavailable"""
+        return [
+            {
+                "type": "automation",
+                "priority": "high",
+                "step_number": 2,
+                "suggestion": "Automate data validation",
+                "rationale": "Reduces manual errors and speeds up process",
+                "impact": "30% time savings, improved accuracy"
+            }
+        ]
+
+    def close(self):
+        """Close database connection"""
+        self.sop_manager.close()
+
+
+# === TEST CODE ===
+
+def main():
+    """Test AI SOP generator (Local)"""
+    print("=" * 70)
+    print("AI-Powered SOP Generator (Local - No API Key Required)")
+    print("=" * 70)
+
+    generator = SOPGeneratorLocal()
+
+    print(f"\nClaude Code CLI available: {generator.use_claude_code}")
+
+    try:
+        print("\n1. Generating SOP from description...")
+        description = """
+        Process for onboarding a new employee:
+        - Create user accounts (email, systems)
+        - Order equipment (laptop, phone)
+        - Schedule orientation
+        - Assign mentor
+        - Set up workstation
+        """
+
+        sop_data = generator.generate_sop_from_description(
+            description,
+            function_name="Human Resources"
+        )
+
+        print(f"   Generated SOP: {sop_data['sop_code']} - {sop_data['title']}")
+        print(f"   Steps: {len(sop_data['steps'])}")
+        print(f"   Duration: {sop_data['estimated_duration']} minutes")
+
+        print("\n2. Identifying automation opportunities...")
+        # Would need an existing SOP ID
+        print("   (Requires existing SOP)")
+
+        print(f"\n[OK] AI SOP Generator (Local) working!")
+        if generator.use_claude_code:
+            print("   Using Claude Code CLI for AI features")
+        else:
+            print("   Using template-based generation (Claude Code CLI not found)")
+
+    except Exception as e:
+        print(f"\n[FAIL] Error: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        generator.close()
+
+
+if __name__ == "__main__":
+    main()
