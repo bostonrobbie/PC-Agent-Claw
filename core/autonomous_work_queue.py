@@ -37,19 +37,25 @@ class AutonomousWorkQueue:
     """
 
     def __init__(self):
-        self.memory = PersistentMemory()
+        self.memory = None  # Will be created per-thread
         self.task_queue = queue.PriorityQueue()
         self.running = False
         self.workers = []
         self.completed_today = 0
-        self.session_id = self.memory.start_session()
+        self.session_id = None
+        self.db_path = Path(__file__).parent.parent / "memory.db"
+
+        # Initialize in main thread
+        memory = PersistentMemory(str(self.db_path))
+        self.session_id = memory.start_session()
 
         # Load pending tasks from memory
-        self._load_pending_tasks()
+        self._load_pending_tasks(memory)
+        memory.close()
 
-    def _load_pending_tasks(self):
+    def _load_pending_tasks(self, memory):
         """Load pending tasks from persistent memory"""
-        active_tasks = self.memory.get_active_tasks()
+        active_tasks = memory.get_active_tasks()
         print(f"Loaded {len(active_tasks)} pending tasks from memory")
 
         for task in active_tasks:
@@ -73,8 +79,10 @@ class AutonomousWorkQueue:
             metadata: Additional task data
             execute_func: Function to execute (if not provided, task is just tracked)
         """
-        # Save to persistent memory
-        self.memory.add_task(task_id, description, priority, metadata)
+        # Save to persistent memory (create new connection for thread safety)
+        memory = PersistentMemory(str(self.db_path))
+        memory.add_task(task_id, description, priority, metadata)
+        memory.close()
 
         # Add to queue
         task_data = {
@@ -112,7 +120,7 @@ class AutonomousWorkQueue:
         print("Queue is now running 24/7")
         print()
 
-        send_notification(f"🚀 WORK QUEUE STARTED\n\n{num_workers} workers active\n{self.task_queue.qsize()} tasks pending\nWorking 24/7")
+        send_notification(f"WORK QUEUE STARTED\n\n{num_workers} workers active\n{self.task_queue.qsize()} tasks pending\nWorking 24/7")
 
     def _worker(self, worker_id: int):
         """Worker thread that processes tasks"""
@@ -131,8 +139,11 @@ class AutonomousWorkQueue:
 
                 print(f"[Worker {worker_id}] Processing: {description}")
 
+                # Create thread-local memory connection
+                memory = PersistentMemory(str(self.db_path))
+
                 # Update status to in_progress
-                self.memory.update_task_status(task_id, 'in_progress')
+                memory.update_task_status(task_id, 'in_progress')
 
                 # Execute task
                 try:
@@ -149,15 +160,18 @@ class AutonomousWorkQueue:
                     elapsed = time.time() - start_time
 
                     # Mark complete
-                    self.memory.update_task_status(task_id, 'completed')
+                    memory.update_task_status(task_id, 'completed')
                     self.completed_today += 1
 
                     print(f"[Worker {worker_id}] Completed: {description} ({elapsed:.1f}s)")
 
                 except Exception as e:
                     # Mark failed
-                    self.memory.update_task_status(task_id, 'failed')
+                    memory.update_task_status(task_id, 'failed')
                     print(f"[Worker {worker_id}] Failed: {description} - {str(e)}")
+
+                finally:
+                    memory.close()
 
                     # Could add retry logic here
 
@@ -193,11 +207,14 @@ class AutonomousWorkQueue:
 
     def _send_summary(self):
         """Send periodic summary"""
-        summary = self.memory.get_session_summary()
+        memory = PersistentMemory(str(self.db_path))
+        summary = memory.get_session_summary()
+        memory.close()
+
         summary['completed_today'] = self.completed_today
         summary['pending'] = self.task_queue.qsize()
 
-        msg = f"📊 WORK QUEUE SUMMARY\n\n"
+        msg = f"WORK QUEUE SUMMARY\n\n"
         msg += f"Completed today: {summary['completed_today']}\n"
         msg += f"Pending: {summary['pending']}\n"
         msg += f"Active tasks: {summary['active_tasks']}\n"
@@ -214,11 +231,13 @@ class AutonomousWorkQueue:
             worker.join(timeout=5)
 
         # End session
-        self.memory.end_session(
+        memory = PersistentMemory(str(self.db_path))
+        memory.end_session(
             self.session_id,
             self.completed_today,
             f"Completed {self.completed_today} tasks"
         )
+        memory.close()
 
         print("Work queue stopped")
 
