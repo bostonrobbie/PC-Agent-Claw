@@ -17,6 +17,9 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 from pathlib import Path
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 
 @dataclass
@@ -40,8 +43,10 @@ class CodeChunk:
 class SemanticCodeSearch:
     """Semantic code search across all projects"""
 
-    def __init__(self, db_path: str = "semantic_code_search.db"):
+    def __init__(self, db_path: str = "semantic_code_search.db", max_workers: int = 8):
         self.db_path = db_path
+        self.max_workers = max_workers
+        self._db_lock = threading.Lock()
         self._init_db()
 
     def _init_db(self):
@@ -127,59 +132,154 @@ class SemanticCodeSearch:
         conn.commit()
         conn.close()
 
-    def index_project(self, project_name: str, root_path: str) -> Dict:
-        """Index all code in a project"""
+    def index_project(self, project_name: str, root_path: str, parallel: bool = True) -> Dict:
+        """
+        Index all code in a project with optional parallel processing.
+
+        Args:
+            project_name: Name of the project
+            root_path: Root directory to index
+            parallel: Use multi-threaded indexing (default: True)
+
+        Returns:
+            Dict with indexing stats including performance metrics
+        """
+        start_time = time.time()
         root_path = os.path.abspath(root_path)
 
         if not os.path.exists(root_path):
             return {'error': f'Path does not exist: {root_path}'}
 
-        conn = sqlite3.connect(self.db_path)
-        c = conn.cursor()
-
         # Create or get project
-        c.execute('''
-            INSERT INTO projects (name, root_path)
-            VALUES (?, ?)
-            ON CONFLICT(name) DO UPDATE SET
-                root_path = ?,
-                last_indexed = CURRENT_TIMESTAMP
-        ''', (project_name, root_path, root_path))
+        with self._db_lock:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
 
-        c.execute('SELECT id FROM projects WHERE name = ?', (project_name,))
-        project_id = c.fetchone()[0]
+            c.execute('''
+                INSERT INTO projects (name, root_path)
+                VALUES (?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    root_path = ?,
+                    last_indexed = CURRENT_TIMESTAMP
+            ''', (project_name, root_path, root_path))
 
-        conn.commit()
+            c.execute('SELECT id FROM projects WHERE name = ?', (project_name,))
+            project_id = c.fetchone()[0]
+
+            conn.commit()
+            conn.close()
 
         # Find all code files
         code_files = self._find_code_files(root_path)
         total_files = len(code_files)
-        total_chunks = 0
 
-        for file_path in code_files:
-            chunks = self._parse_file(file_path, project_id)
-            for chunk in chunks:
-                chunk_id = self._add_chunk(conn, chunk)
-                if chunk_id:
-                    self._index_chunk(conn, chunk_id, chunk.content, chunk.semantic_tags)
-                    total_chunks += 1
+        if parallel and len(code_files) > 10:
+            total_chunks = self._index_files_parallel(code_files, project_id)
+        else:
+            total_chunks = self._index_files_sequential(code_files, project_id)
 
         # Update project stats
-        c = conn.cursor()
-        c.execute('''
-            UPDATE projects
-            SET total_files = ?, total_chunks = ?, last_indexed = CURRENT_TIMESTAMP
-            WHERE id = ?
-        ''', (total_files, total_chunks, project_id))
+        with self._db_lock:
+            conn = sqlite3.connect(self.db_path)
+            c = conn.cursor()
+            c.execute('''
+                UPDATE projects
+                SET total_files = ?, total_chunks = ?, last_indexed = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (total_files, total_chunks, project_id))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            conn.close()
+
+        elapsed_time = time.time() - start_time
+        files_per_sec = total_files / elapsed_time if elapsed_time > 0 else 0
 
         return {
             'project_name': project_name,
             'files_indexed': total_files,
-            'chunks_indexed': total_chunks
+            'chunks_indexed': total_chunks,
+            'elapsed_time': round(elapsed_time, 2),
+            'files_per_second': round(files_per_sec, 2),
+            'parallel': parallel
         }
+
+    def _index_files_sequential(self, code_files: List[str], project_id: int) -> int:
+        """Index files sequentially (original method)"""
+        total_chunks = 0
+        conn = sqlite3.connect(self.db_path)
+
+        for file_path in code_files:
+            try:
+                chunks = self._parse_file(file_path, project_id)
+                for chunk in chunks:
+                    chunk_id = self._add_chunk(conn, chunk)
+                    if chunk_id:
+                        self._index_chunk(conn, chunk_id, chunk.content, chunk.semantic_tags)
+                        total_chunks += 1
+            except Exception as e:
+                print(f"Error indexing {file_path}: {e}")
+
+        conn.close()
+        return total_chunks
+
+    def _index_files_parallel(self, code_files: List[str], project_id: int) -> int:
+        """
+        Index files in parallel using ThreadPoolExecutor.
+        Target: 100+ files/sec with 8 threads.
+        """
+        total_chunks = 0
+        chunk_buffer = []
+        buffer_lock = threading.Lock()
+
+        def process_file(file_path: str) -> int:
+            """Process a single file and return chunk count"""
+            try:
+                chunks = self._parse_file(file_path, project_id)
+
+                # Add to buffer for batch insertion
+                with buffer_lock:
+                    chunk_buffer.extend(chunks)
+
+                    # Flush buffer when it reaches threshold
+                    if len(chunk_buffer) >= 50:
+                        self._flush_chunk_buffer(chunk_buffer.copy())
+                        chunk_buffer.clear()
+
+                return len(chunks)
+            except Exception as e:
+                print(f"Error processing {file_path}: {e}")
+                return 0
+
+        # Process files in parallel
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {executor.submit(process_file, file_path): file_path
+                      for file_path in code_files}
+
+            for future in as_completed(futures):
+                try:
+                    chunk_count = future.result()
+                    total_chunks += chunk_count
+                except Exception as e:
+                    file_path = futures[future]
+                    print(f"Exception processing {file_path}: {e}")
+
+        # Flush remaining chunks
+        if chunk_buffer:
+            self._flush_chunk_buffer(chunk_buffer)
+
+        return total_chunks
+
+    def _flush_chunk_buffer(self, chunks: List[CodeChunk]):
+        """Flush chunk buffer to database in batch"""
+        with self._db_lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                for chunk in chunks:
+                    chunk_id = self._add_chunk(conn, chunk)
+                    if chunk_id:
+                        self._index_chunk(conn, chunk_id, chunk.content, chunk.semantic_tags)
+            finally:
+                conn.close()
 
     def _find_code_files(self, root_path: str) -> List[str]:
         """Find all code files in directory"""
