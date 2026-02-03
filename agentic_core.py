@@ -7,10 +7,16 @@ from datetime import datetime
 
 sys.path.append(str(Path(__file__).parent))
 
-from vision.vision_system import VisionSystem
 from memory.episodic_memory import EpisodicMemory
 from core.persistent_memory import PersistentMemory
 from core.telegram_connector import TelegramConnector
+
+# Vision is optional (requires pytesseract)
+try:
+    from vision.vision_system import VisionSystem
+    VISION_AVAILABLE = True
+except ImportError:
+    VISION_AVAILABLE = False
 
 class AgenticCore:
     """
@@ -34,23 +40,37 @@ class AgenticCore:
         self.telegram = TelegramConnector()
 
         # Agentic capabilities
-        self.vision = VisionSystem()
+        if VISION_AVAILABLE:
+            self.vision = VisionSystem()
+        else:
+            self.vision = None
+            print("Vision system not available (requires pytesseract)")
+
         self.episodic_memory = EpisodicMemory()
 
-        # These will be initialized when background agent completes
+        # Initialize all remaining systems
         self.reasoning = None
         self.proactive_agent = None
         self.multi_agent = None
+        self.learning = None
+        self.pattern_learner = None
+        self.natural_language = None
 
         # State
         self.started_at = datetime.now()
         self.capabilities_active = {
-            'vision': True,
+            'vision': VISION_AVAILABLE,
             'episodic_memory': True,
             'reasoning': False,
             'proactive_agent': False,
-            'multi_agent': False
+            'multi_agent': False,
+            'learning': False,
+            'pattern_learner': False,
+            'natural_language': False
         }
+
+        # Try to initialize remaining systems
+        self.initialize_remaining_systems()
 
         print("Agentic Core initialized!")
 
@@ -76,6 +96,27 @@ class AgenticCore:
             self.capabilities_active['multi_agent'] = True
         except ImportError:
             print("Multi-Agent Coordinator not yet available")
+
+        try:
+            from ml.reinforcement_learning import ReinforcementLearning
+            self.learning = ReinforcementLearning()
+            self.capabilities_active['learning'] = True
+        except ImportError:
+            print("Reinforcement Learning not yet available")
+
+        try:
+            from ml.pattern_learner import PatternLearner
+            self.pattern_learner = PatternLearner()
+            self.capabilities_active['pattern_learner'] = True
+        except ImportError:
+            print("Pattern Learner not yet available")
+
+        try:
+            from interface.natural_language import NaturalLanguageInterface
+            self.natural_language = NaturalLanguageInterface()
+            self.capabilities_active['natural_language'] = True
+        except ImportError:
+            print("Natural Language Interface not yet available")
 
     def see(self, analyze: bool = True) -> Dict:
         """
@@ -192,6 +233,46 @@ class AgenticCore:
         """
         return self.vision.verify_output(expected_text=expected_text)
 
+    def ask(self, question: str) -> str:
+        """
+        Ask question in natural language to any system
+
+        Args:
+            question: Natural language question
+
+        Returns:
+            Response from appropriate system
+        """
+        if self.natural_language:
+            return self.natural_language.execute(question)
+        return "Natural language interface not available"
+
+    def learn_from_outcome(self, action_type: str, action_name: str,
+                          success: bool, outcome_value: float = None) -> float:
+        """
+        Learn from action outcome
+
+        Args:
+            action_type: Type of action
+            action_name: Specific action taken
+            success: Whether it succeeded
+            outcome_value: Numeric outcome
+
+        Returns:
+            Calculated reward
+        """
+        if self.learning:
+            return self.learning.record_outcome(
+                action_type, action_name, success, outcome_value
+            )
+        return 0.0
+
+    def get_learning_summary(self) -> Dict:
+        """Get summary of all learning"""
+        if self.learning:
+            return self.learning.get_learning_summary()
+        return {'status': 'Learning system not available'}
+
     def get_capabilities_status(self) -> Dict:
         """Get status of all capabilities"""
         return {
@@ -202,7 +283,10 @@ class AgenticCore:
                 'episodic_memory': 'active' if self.episodic_memory else 'inactive',
                 'reasoning': 'active' if self.reasoning else 'inactive',
                 'proactive_agent': 'active' if self.proactive_agent else 'inactive',
-                'multi_agent': 'active' if self.multi_agent else 'inactive'
+                'multi_agent': 'active' if self.multi_agent else 'inactive',
+                'learning': 'active' if self.learning else 'inactive',
+                'pattern_learner': 'active' if self.pattern_learner else 'inactive',
+                'natural_language': 'active' if self.natural_language else 'inactive'
             }
         }
 
