@@ -1,0 +1,244 @@
+================================================================================
+CODE EXAMPLE LIBRARY SYSTEM - PRODUCTION GUIDE
+================================================================================
+
+FILE LOCATION: C:/Users/User/.openclaw/workspace/learning/code_library.py
+DATABASE: code_library.db (SQLite)
+LINE COUNT: 693 lines of production-ready code
+
+================================================================================
+CORE FEATURES IMPLEMENTED
+================================================================================
+
+1. PATTERN STORAGE & MANAGEMENT
+   - Save approved code patterns with metadata
+   - Automatic duplicate detection via code hashing
+   - Tagging and categorization system
+   - Quality scoring on save
+
+2. PATTERN MATCHING
+   - Sequence-based similarity matching (0-1 score)
+   - Semantic similarity using token analysis
+   - Structural pattern extraction
+   - Code hash-based deduplication
+
+3. SIMILARITY SCORING
+   - Similarity ratio calculation (SequenceMatcher)
+   - Semantic similarity (token overlap)
+   - Configurable threshold filtering
+   - Ranked result sorting
+
+4. TEMPLATE LIBRARY
+   - Template variable support with {variable} syntax
+   - Instantiate templates with custom variables
+   - Template metadata tracking
+   - Dependency tracking
+
+5. PATTERN EXTRACTION
+   - Function/class definitions detection
+   - Exception handling identification
+   - List comprehension detection
+   - Decorator pattern recognition
+   - Context manager detection
+
+6. TAG & CATEGORIZATION
+   - Multi-tag support per pattern
+   - Category-based organization
+   - Tag-based search
+   - Use-case based discovery
+
+7. SMART SEARCH CAPABILITIES
+   - Search by tag
+   - Search by category
+   - Search by pattern type
+   - Search by use case keywords
+   - Fuzzy code similarity search
+
+8. QUALITY SCORING SYSTEM
+   - Readability score (comments, line length)
+   - Maintainability score (complexity, duplication)
+   - Efficiency score (nested loops, built-in usage)
+   - Weighted aggregate quality score
+
+9. SQLITE DATABASE
+   - 4 main tables: code_patterns, pattern_tags, pattern_similarity, quality_metrics
+   - Foreign key relationships
+   - Unique constraints for data integrity
+   - Efficient indexing
+
+10. USAGE TRACKING
+    - Per-pattern usage counter
+    - Automatic increment
+    - Statistics aggregation
+
+================================================================================
+CLASS STRUCTURE
+================================================================================
+
+CodePattern (dataclass)
+  - Core data structure for patterns
+  - Fields: name, code, language, category, tags, quality_score, etc.
+
+CodeLibraryDB (database layer)
+  - SQLite connection management
+  - Query execution (SELECT/INSERT/UPDATE)
+  - Schema initialization
+
+PatternMatcher (matching engine)
+  - Code hashing
+  - Structure extraction
+  - Similarity calculations
+  - Pattern extraction
+
+QualityScorer (quality assessment)
+  - Readability scoring
+  - Maintainability scoring
+  - Efficiency scoring
+  - Aggregate quality calculation
+
+CodeLibrary (main API)
+  - Pattern save/retrieve
+  - Search operations (tag, category, use case, similarity)
+  - Template instantiation
+  - Usage tracking
+  - Statistics
+
+================================================================================
+MAIN API METHODS
+================================================================================
+
+library = CodeLibrary("code_library.db")
+
+# Save patterns
+pattern_id = library.save_pattern(pattern)
+
+# Retrieve
+pattern = library.get_pattern(pattern_id)
+
+# Search operations
+similar = library.find_similar_patterns(code, threshold=0.6)
+results = library.search_by_tag("tag_name")
+results = library.search_by_category("category_name")
+results = library.search_by_use_case("use_case_keywords")
+results = library.search_by_pattern("pattern_type")
+
+# Template instantiation
+code = library.instantiate_template(pattern_id, {"var": "value"})
+
+# Usage and metrics
+library.increment_usage(pattern_id)
+metrics = library.get_quality_metrics(pattern_id)
+library.update_quality_metrics(pattern_id, {"readability": 0.9})
+
+# List and statistics
+all_patterns = library.list_all_patterns(limit=100)
+stats = library.get_statistics()
+
+================================================================================
+TEST COVERAGE (12 test cases included)
+================================================================================
+
+[TEST 1]  Save approved code patterns
+[TEST 2]  Retrieve patterns
+[TEST 3]  Pattern matching and similarity
+[TEST 4]  Search by tag
+[TEST 5]  Search by category
+[TEST 6]  Search by use case
+[TEST 7]  Pattern extraction
+[TEST 8]  Quality scoring metrics
+[TEST 9]  Usage tracking
+[TEST 10] Library statistics
+[TEST 11] List all patterns
+[TEST 12] Semantic similarity analysis
+
+All tests pass successfully with fibonacci algorithms and list comprehensions.
+
+================================================================================
+DATABASE SCHEMA
+================================================================================
+
+code_patterns table:
+  - pattern_id (PRIMARY KEY)
+  - name (UNIQUE)
+  - code (BLOB)
+  - language
+  - category
+  - description
+  - quality_score
+  - usage_count
+  - created_at
+  - updated_at
+  - template_vars (JSON)
+  - dependencies (JSON)
+  - code_hash (UNIQUE)
+
+pattern_tags table:
+  - tag_id (PRIMARY KEY)
+  - pattern_id (FOREIGN KEY)
+  - tag
+  - UNIQUE(pattern_id, tag)
+
+pattern_similarity table:
+  - similarity_id (PRIMARY KEY)
+  - pattern_id_1 (FOREIGN KEY)
+  - pattern_id_2 (FOREIGN KEY)
+  - similarity_score
+
+quality_metrics table:
+  - metric_id (PRIMARY KEY)
+  - pattern_id (FOREIGN KEY)
+  - readability
+  - maintainability
+  - efficiency
+  - test_coverage
+
+================================================================================
+QUALITY SCORING ALGORITHM
+================================================================================
+
+Readability Score (0-1):
+  - Base: 1.0
+  - Penalty: Long lines (>100 chars): -0.05 per line (max 0.2)
+  - Bonus: Comments: +0.5 per 10% comment ratio (max 0.2)
+  - Bonus: Proper naming: +0.1
+
+Maintainability Score (0-1):
+  - Base: 1.0
+  - Penalty: >5 functions: -0.2
+  - Penalty: Deep nesting (>20 spaces): -0.15
+  - Penalty: Code duplication: -0.05 per duplicate (max 0.3)
+
+Efficiency Score (0-1):
+  - Base: 1.0
+  - Penalty: Nested loops: -0.15 per loop (max 0.3)
+  - Penalty: String concatenation in loop: -0.1
+  - Bonus: Built-in usage: +0.05 per usage (max 0.2)
+
+Overall Quality = 0.3 * Readability + 0.4 * Maintainability + 0.3 * Efficiency
+
+================================================================================
+USAGE EXAMPLE
+================================================================================
+
+from learning.code_library import CodeLibrary, CodePattern
+
+# Initialize library
+library = CodeLibrary()
+
+# Create and save pattern
+pattern = CodePattern(
+    name="my_pattern",
+    code="def my_function(): pass",
+    category="utilities",
+    tags=["useful", "simple"],
+    description="A useful pattern"
+)
+pattern_id = library.save_pattern(pattern)
+
+# Search for similar code
+similar = library.find_similar_patterns("def my_func(): pass")
+
+# Get quality metrics
+stats = library.get_statistics()
+
+================================================================================
