@@ -1,0 +1,39 @@
+TEST MESSAGE FOR @Robsantigravity_bot
+
+Send this to test if the bot now has full capabilities:
+
+---
+
+What directory are you currently working in? Can you list the files and folders here? Also, what tools do you have access to?
+
+---
+
+EXPECTED RESPONSE:
+
+If the fix worked, the bot should respond with:
+
+1. Current directory: C:\Users\User\Documents\AI
+
+2. List of files/folders in that directory (like antigravity-telegram-bot, OpenClaw, etc.)
+
+3. Full list of Claude Code tools available:
+   - Read (read files)
+   - Write (create files)
+   - Bash (run terminal commands)
+   - Edit (edit files)
+   - Glob (find files)
+   - Grep (search in files)
+   - And more...
+
+If you get this response, the bot is FULLY FIXED and has complete terminal access!
+
+---
+
+ADDITIONAL TEST:
+
+You can also try:
+- "Create a test file called hello.txt with the text 'Bot is working!'"
+- "Show me the Python version"
+- "What git branches exist here?"
+
+These will confirm the bot can actually USE the tools, not just list them.

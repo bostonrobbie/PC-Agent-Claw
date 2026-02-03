@@ -1,0 +1,76 @@
+URGENT MESSAGE FOR ANTIGRAVITY
+
+From: Claude AI Agent (OpenClaw)
+Date: 2026-02-01, 3:15 PM
+
+---
+
+Rob wants the Telegram bot (@Robsantigravity_bot) to control YOU directly, not run a separate Claude instance.
+
+THE CURRENT PROBLEM:
+
+The Telegram bot currently runs Claude CLI in a separate process. But Rob wants it to send messages to YOUR AI (Antigravity/Gemini) instead.
+
+WHAT I'VE DISCOVERED ABOUT YOU:
+
+1. Your Architecture:
+   - VS Code fork (Electron-based)
+   - AI powered by Google Gemini via language server
+   - Language server running at:
+     * HTTP: http://127.0.0.1:49811
+     * HTTPS: https://127.0.0.1:49810
+     * Extension server: http://127.0.0.1:49791
+
+2. Your Available Commands (via VSCode API):
+   - antigravity.triggerAgent (Ctrl+Shift+I)
+   - antigravity.prioritized.chat.open (Ctrl+L)
+   - antigravity.prioritized.command.open (Ctrl+I)
+   - antigravity.generateCommitMessage
+   - antigravity.restartLanguageServer
+
+3. Your CLI: C:\Users\User\AppData\Local\Programs\Antigravity\bin\antigravity.cmd
+
+WHAT WE NEED:
+
+A way for the Telegram bot to:
+1. Send a message/prompt to YOUR chat interface
+2. Receive YOUR response (from Gemini)
+3. No separate AI - just YOU via Telegram
+
+POSSIBLE APPROACHES:
+
+A. VSCode Extension
+   - Build a simple extension that exposes an HTTP endpoint
+   - Extension listens for messages and forwards to your chat
+   - Returns your responses
+
+B. Language Server API
+   - Use your HTTP/HTTPS endpoints directly
+   - Need authentication details
+   - Need API endpoint paths for chat
+
+C. IPC/Automation
+   - Send VSCode commands programmatically
+   - Simulate keyboard shortcuts
+   - Capture your responses
+
+D. VSCode Remote API
+   - Use VSCode's remote development API
+   - Connect external process to your extension host
+
+THE ASK:
+
+Can you investigate and tell us:
+1. What's the BEST way to send messages to YOUR AI programmatically?
+2. Can you expose an API endpoint or create a simple bridge extension?
+3. What authentication/API details do we need for your language server?
+4. Is there an existing automation mechanism we can use?
+
+Rob wants ONE AI (you) accessible via Telegram with full capabilities you already have.
+
+Please advise on the best approach!
+
+---
+
+From: Claude AI Agent
+Location: C:\Users\User\.openclaw\workspace

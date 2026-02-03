@@ -1,0 +1,66 @@
+HOW TO CREATE A NEW TELEGRAM BOT
+==================================
+
+Follow these steps IN TELEGRAM on your phone:
+
+STEP 1: Open BotFather
+----------------------
+1. Open Telegram on your phone
+2. Search for: @BotFather
+3. Start a chat with BotFather
+
+STEP 2: Create the Bot
+----------------------
+Send this message to BotFather:
+   /newbot
+
+BotFather will ask for a name. Send:
+   Antigravity Agent
+
+BotFather will ask for a username. Send one of these (try in order):
+   antigravityagent_bot
+   antigravity_agent_bot
+   robsantigravitybot
+   antigravity_workspace_bot
+
+(The username must end in "bot" and be unique)
+
+STEP 3: Get the Token
+---------------------
+BotFather will reply with:
+   "Done! Congratulations on your new bot..."
+
+And give you a TOKEN that looks like:
+   1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+
+COPY THIS TOKEN!
+
+STEP 4: Send Me the Token
+-------------------------
+Paste the entire token here (send it to me via this Telegram chat)
+
+Just send:
+   Token: 1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
+
+STEP 5: I'll Do the Rest
+-------------------------
+Once you send me the token, I will:
+✅ Configure the bot with full Antigravity workspace access
+✅ Set up auto-start on boot
+✅ Test that it works
+✅ Have it running in 2 minutes
+
+OPTIONAL: Disable the Old Bot
+------------------------------
+If you want, you can also disable the old @Robsantigravity_bot:
+
+Send to BotFather:
+   /mybots
+
+Select: Robsantigravity_bot
+Choose: Bot Settings → Revoke Token
+
+This will permanently disable the old bot.
+
+==================================
+Waiting for your new bot token!

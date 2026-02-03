@@ -1,0 +1,136 @@
+//@version=5
+strategy("NQ 15min Opening Range - Volatility Filter", overlay=true, pyramiding=0, default_qty_type=strategy.fixed, default_qty_value=1)
+
+// ============================================================================
+// STRATEGY: 15-Minute Opening Range Breakout WITH VOLATILITY FILTER
+// ============================================================================
+// VARIANT #2: Volatility Filter
+//
+// Changes from base strategy:
+// - Added ATR(14) volatility filter
+// - Only trades when ATR > SMA(ATR, 20)
+// - Filters out low volatility days that often produce false breakouts
+//
+// Expected Impact:
+// - Fewer total trades (~40% reduction)
+// - Higher win rate
+// - Better profit factor
+// - Lower risk of choppy, range-bound losses
+// ============================================================================
+
+// Input Parameters
+input.bool(enableLong = true, title="Enable Long Trades", group="Trade Direction")
+input.bool(enableShort = true, title="Enable Short Trades", group="Trade Direction")
+input.float(slippage = 0.25, title="Slippage (points)", group="Execution")
+
+// Volatility Filter Parameters
+input.int(atrPeriod = 14, title="ATR Period", group="Volatility Filter")
+input.int(atrMaPeriod = 20, title="ATR MA Period", group="Volatility Filter")
+input.bool(enableVolFilter = true, title="Enable Volatility Filter", group="Volatility Filter")
+
+// Time Session (9:30 AM - 9:45 AM ET)
+tradingSession = "0930-0945:23456"
+inSession = not na(time(timeframe.period, tradingSession, "America/New_York"))
+
+// Track if we've traded today
+var bool tradedToday = false
+var float entryPrice = na
+var int entryBar = na
+
+// Reset daily flag at start of new day
+if ta.change(time("D"))
+    tradedToday := false
+    entryPrice := na
+    entryBar := na
+
+// Get current bar time in ET
+currentHour = hour(time, "America/New_York")
+currentMinute = minute(time, "America/New_York")
+
+// Identify the 9:30-9:35 bar (first 5min bar)
+is_930_bar = currentHour == 9 and currentMinute == 30
+
+// Capture Opening Range High/Low from 9:30-9:35 bar
+var float orHigh = na
+var float orLow = na
+
+if is_930_bar
+    orHigh := high
+    orLow := low
+
+// Current time check - are we in 9:35-9:45 window?
+is_935_to_945 = currentHour == 9 and currentMinute >= 35 and currentMinute < 45
+
+// Check if it's exactly 9:45 (exit time)
+is_945_bar = currentHour == 9 and currentMinute == 45
+
+// ============================================================================
+// VOLATILITY FILTER
+// ============================================================================
+atrValue = ta.atr(atrPeriod)
+atrMa = ta.sma(atrValue, atrMaPeriod)
+volatilityOk = not enableVolFilter or (atrValue > atrMa)
+
+// Store volatility status at market open for consistency
+var bool dailyVolatilityOk = false
+if is_930_bar
+    dailyVolatilityOk := volatilityOk
+
+// Entry Conditions (now with volatility filter)
+longCondition = enableLong and is_935_to_945 and not tradedToday and not na(orHigh) and close > orHigh and dailyVolatilityOk
+shortCondition = enableShort and is_935_to_945 and not tradedToday and not na(orLow) and close < orLow and dailyVolatilityOk
+
+// Execute Trades
+if longCondition
+    strategy.entry("Long OR", strategy.long)
+    tradedToday := true
+    entryPrice := close
+    entryBar := bar_index
+
+if shortCondition
+    strategy.entry("Short OR", strategy.short)
+    tradedToday := true
+    entryPrice := close
+    entryBar := bar_index
+
+// Exit at 9:45 bar open OR if we're past 9:45
+exitCondition = is_945_bar or (currentHour == 9 and currentMinute > 45) or (currentHour > 9)
+
+if exitCondition and strategy.position_size != 0
+    if strategy.position_size > 0
+        strategy.close("Long OR", comment="9:45 Exit")
+    else if strategy.position_size < 0
+        strategy.close("Short OR", comment="9:45 Exit")
+
+// Visualization
+bgcolor(is_930_bar ? color.new(color.blue, 90) : na, title="9:30 Bar")
+bgcolor(is_935_to_945 ? color.new(color.yellow, 95) : na, title="Trading Window")
+bgcolor(is_945_bar ? color.new(color.red, 90) : na, title="9:45 Exit")
+
+// Volatility filter indicator
+bgcolor(is_930_bar and not dailyVolatilityOk ? color.new(color.orange, 80) : na, title="Low Volatility Day")
+
+// Plot Opening Range levels
+plot(not na(orHigh) and inSession ? orHigh : na, "OR High", color.green, 2, plot.style_linebr)
+plot(not na(orLow) and inSession ? orLow : na, "OR Low", color.red, 2, plot.style_linebr)
+
+// Plot Entry Price
+plot(not na(entryPrice) and strategy.position_size != 0 ? entryPrice : na, "Entry", color.orange, 1, plot.style_cross)
+
+// Plot volatility indicators
+plot(atrValue, "ATR", color.blue, 1, display=display.data_window)
+plot(atrMa, "ATR MA", color.purple, 1, display=display.data_window)
+
+// Performance Info Box
+if barstate.islastconfirmedhistory
+    var table perfTable = table.new(position.top_right, 2, 5, bgcolor=color.new(color.gray, 85), border_width=1)
+    table.cell(perfTable, 0, 0, "Strategy", text_color=color.white, text_size=size.small)
+    table.cell(perfTable, 1, 0, "15min OR + Vol Filter", text_color=color.yellow, text_size=size.small)
+    table.cell(perfTable, 0, 1, "Window", text_color=color.white, text_size=size.small)
+    table.cell(perfTable, 1, 1, "9:30-9:45 ET", text_color=color.white, text_size=size.small)
+    table.cell(perfTable, 0, 2, "Max Trades/Day", text_color=color.white, text_size=size.small)
+    table.cell(perfTable, 1, 2, "1", text_color=color.white, text_size=size.small)
+    table.cell(perfTable, 0, 3, "Timeframe", text_color=color.white, text_size=size.small)
+    table.cell(perfTable, 1, 3, "5min", text_color=color.aqua, text_size=size.small)
+    table.cell(perfTable, 0, 4, "Filter", text_color=color.white, text_size=size.small)
+    table.cell(perfTable, 1, 4, "ATR > SMA(ATR,20)", text_color=color.lime, text_size=size.small)

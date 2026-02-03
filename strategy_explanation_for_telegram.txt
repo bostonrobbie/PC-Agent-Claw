@@ -1,0 +1,52 @@
+15-MINUTE OPENING RANGE STRATEGY EXPLAINED
+
+SIMPLE VERSION:
+Trade the breakout of the first 5 minutes of market open, hold for max 15 minutes.
+
+TIMELINE (9:30-9:45 AM ET):
+
+9:30-9:35: CAPTURE THE RANGE
+- First 5-minute bar
+- Record HIGH and LOW
+- This is your "Opening Range"
+
+9:35-9:45: TRADE THE BREAKOUT
+- If price breaks ABOVE high → GO LONG
+- If price breaks BELOW low → GO SHORT
+- Only ONE trade per day
+
+9:45 AM: EXIT (Always)
+- Close position at 9:45 bar open
+- Max hold: 15 minutes
+- Done for the day
+
+EXAMPLE:
+9:30-9:35: High=$19,500, Low=$19,450
+9:37: Breaks above $19,500 → LONG @ $19,502
+9:45: EXIT @ $19,520 → +$18 profit
+
+WHY IT WORKS:
+- Market open has highest volatility
+- Breakouts show directional conviction
+- Fixed exit = disciplined risk control
+- 15 years proven profitable
+
+RESULTS (15 YEARS):
+- Total Return: 348%
+- Max Drawdown: 21%
+- Sharpe Ratio: 0.93
+- Win Rate: 53.6%
+- Trades: 3,515 (one per day)
+
+RULES:
+✓ 5-minute bars only
+✓ NQ Futures
+✓ One trade per day max
+✓ Always exit at 9:45
+✓ No overnight positions
+
+VARIANT #2 (Volatility Filter):
+Same strategy but only trades on volatile days
+- Adds: ATR(14) > SMA(ATR,20) filter
+- Expected: Fewer trades, higher win rate
+- Ready to backtest on TradingView

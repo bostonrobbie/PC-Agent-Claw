@@ -1,0 +1,22 @@
+15-MINUTE OPENING RANGE STRATEGY BACKTEST REPORT
+======================================================================
+
+Backtest Date: 2026-02-02 18:04:10
+Data Period: 2011-01-26 09:30:00 to 2026-01-21 09:30:00
+
+TOP 5 PERFORMANCE METRICS:
+----------------------------------------------------------------------
+  Total Return (%)     348.33
+  Max Drawdown (%)     20.91
+  Sharpe Ratio         0.93
+  Profit Factor        1.22
+  Win Rate (%)         53.6
+
+ADDITIONAL METRICS:
+----------------------------------------------------------------------
+  Total Trades         3515
+  Winning Trades       1884
+  Losing Trades        1631
+  Total PnL            348329.1
+  Avg Win              1037.57
+  Avg Loss             -984.95

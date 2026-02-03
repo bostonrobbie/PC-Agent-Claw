@@ -1,0 +1,57 @@
+UNIFIED TRADING BRIDGE - STATUS REPORT
+
+SYSTEM STATUS: RUNNING (OK)
+
+Location: C:\Users\User\Documents\AI\Unified_Bridge
+
+ACTIVE CONNECTIONS:
+
+1. IBKR (Interactive Brokers)
+- Status: HEALTHY
+- Mode: Paper Trading
+- Port: 5001
+- Last Health Check: 20:24:38 (working)
+- Current Position: 3 x MNQ futures (-$11.26 unrealized)
+- Symbol Map: NQ->MNQ, ES->MES
+
+2. MT5 (MetaTrader 5)
+- Status: RUNNING
+- Port: 80
+- Auto-connect: Enabled
+- Magic Number: 999888
+
+3. TopStep API
+- Status: INTERMITTENT (connection issues)
+- Account: 150KTC-V2-484610-99598417
+- Balance: $151,283.25
+- Auth: rgorham369@gmail.com
+- Last Error: Remote disconnect at 20:24:19
+
+TUNNEL STATUS:
+- IBKR Tunnel: Restarting periodically (connection drops)
+- MT5 Tunnel: Restarting periodically (connection drops)
+- Last Restart: 20:04:27
+
+TRADING CONFIGURATION:
+- Trading Days: Mon-Fri
+- Sunday Session: 18:00 (enabled)
+- Hard Exit Time: 16:50 ET (enabled)
+- Timezone: America/New_York
+
+BROKER CONTROLS:
+- MT5: Active (not paused)
+- IBKR: Active (not paused)
+- TopStep: Active (not paused)
+
+ISSUES DETECTED:
+1. Public tunnels experiencing connection drops
+2. TopStep auth intermittent (remote disconnects)
+3. Fast restart cycles (18-19 restart attempts)
+
+CURRENT POSITIONS (IBKR Paper):
+- 3 x MNQ (micro NQ futures)
+- Unrealized P&L: -$11.26
+- 1 x AAPL stock
+- Unrealized P&L: +$8.17
+
+READ ONLY MONITORING - NO CHANGES MADE
