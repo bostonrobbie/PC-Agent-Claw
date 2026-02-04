@@ -73,6 +73,13 @@ const ALERT_AFTER_FAILURES = 3;
 // Minimum time between alerts (30 minutes)
 const ALERT_COOLDOWN_MS = 30 * 60 * 1000;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Internal Watchdog: Self-terminate if no activity for this duration
+// This allows PM2 or another process manager to restart us on freeze
+// NOTE: Set high enough to allow long-running CLI tasks (10+ min) to complete
+// ─────────────────────────────────────────────────────────────────────────────
+const WATCHDOG_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
 /**
  * Attempt to send a direct Telegram alert message.
  * This uses sendMessage API which is independent of polling.
@@ -249,8 +256,20 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
   } else {
     log("Telegram monitor started. No alert target configured (network errors will not be notified).");
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Internal Watchdog: DISABLED for all-day agent operation
+  // The watchdog can't distinguish "frozen" from "busy working on long tasks"
+  // We rely on external auto-restart script (gateway-autostart.cmd) for crash recovery
+  // If gateway crashes completely, port 18789 stops listening and script restarts it
+  // ─────────────────────────────────────────────────────────────────────────────
+  // let lastActivityTime = Date.now();
+  // const touchActivity = () => { lastActivityTime = Date.now(); };
+  // const watchdogInterval = setInterval(() => { ... }, 60_000);
+
   while (!opts.abortSignal?.aborted) {
     const runnerStartTime = Date.now();
+    // touchActivity(); // Disabled - no internal watchdog
     const runner = run(bot, createTelegramRunnerOptions(cfg));
     const stopOnAbort = () => {
       if (opts.abortSignal?.aborted) {

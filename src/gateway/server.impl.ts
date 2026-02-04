@@ -46,7 +46,7 @@ import { ExecApprovalManager } from "./exec-approval-manager.js";
 import { createExecApprovalHandlers } from "./server-methods/exec-approval.js";
 import { createExecApprovalForwarder } from "../infra/exec-approval-forwarder.js";
 import type { startBrowserControlServerIfEnabled } from "./server-browser.js";
-import { createChannelManager } from "./server-channels.js";
+import { type ChannelManager, createChannelManager } from "./server-channels.js";
 import { createAgentEventHandler } from "./server-chat.js";
 import { createGatewayCloseHandler } from "./server-close.js";
 import { buildGatewayCronService } from "./server-cron.js";
@@ -187,8 +187,8 @@ export async function startGatewayServer(
     const issues =
       configSnapshot.issues.length > 0
         ? configSnapshot.issues
-            .map((issue) => `${issue.path || "<root>"}: ${issue.message}`)
-            .join("\n")
+          .map((issue) => `${issue.path || "<root>"}: ${issue.message}`)
+          .join("\n")
         : "Unknown validation issue.";
     throw new Error(
       `Invalid config at ${configSnapshot.path}.\n${issues}\nRun "${formatCliCommand("openclaw doctor")}" to repair, then retry.`,
@@ -269,6 +269,29 @@ export async function startGatewayServer(
   if (cfgAtStart.gateway?.tls?.enabled && !gatewayTls.enabled) {
     throw new Error(gatewayTls.error ?? "gateway tls: failed to enable");
   }
+  let channelManager: ChannelManager | null = null;
+  const healthCheck = async () => {
+    if (!channelManager) return { ok: true, status: 200, note: "starting" };
+    try {
+      const snap = channelManager.getRuntimeSnapshot();
+      // Deep check: If a channel is supposed to be running but is disconnected, flag it.
+      // Especially 'telegram'.
+      for (const [id, ch] of Object.entries(snap.channels ?? {})) {
+        if (ch?.running && ch.connected === false) {
+          return {
+            ok: false,
+            status: 503,
+            error: `channel-${id}-disconnected`,
+            details: ch,
+          };
+        }
+      }
+      return { ok: true, status: 200, channels: snap.channels };
+    } catch (err) {
+      return { ok: false, status: 500, error: String(err) };
+    }
+  };
+
   const {
     canvasHost,
     httpServer,
@@ -306,6 +329,7 @@ export async function startGatewayServer(
     log,
     logHooks,
     logPlugins,
+    healthCheck,
   });
   let bonjourStop: (() => Promise<void>) | null = null;
   const nodeRegistry = new NodeRegistry();
@@ -335,7 +359,7 @@ export async function startGatewayServer(
   });
   let { cron, storePath: cronStorePath } = cronState;
 
-  const channelManager = createChannelManager({
+  channelManager = createChannelManager({
     loadConfig,
     channelLogs,
     channelRuntimeEnvs,

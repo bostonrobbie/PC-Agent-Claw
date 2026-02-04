@@ -86,8 +86,8 @@ export function createHooksRequestHandler(
     if (fromQuery) {
       logHooks.warn(
         "Hook token provided via query parameter is deprecated for security reasons. " +
-          "Tokens in URLs appear in logs, browser history, and referrer headers. " +
-          "Use Authorization: Bearer <token> or X-OpenClaw-Token header instead.",
+        "Tokens in URLs appear in logs, browser history, and referrer headers. " +
+        "Use Authorization: Bearer <token> or X-OpenClaw-Token header instead.",
       );
     }
 
@@ -211,6 +211,7 @@ export function createGatewayHttpServer(opts: {
   handlePluginRequest?: HooksRequestHandler;
   resolvedAuth: import("./auth.js").ResolvedGatewayAuth;
   tlsOptions?: TlsOptions;
+  healthCheck?: () => Promise<{ ok: boolean; status?: number; error?: string;[key: string]: unknown } | null>;
 }): HttpServer {
   const {
     canvasHost,
@@ -225,11 +226,11 @@ export function createGatewayHttpServer(opts: {
   } = opts;
   const httpServer: HttpServer = opts.tlsOptions
     ? createHttpsServer(opts.tlsOptions, (req, res) => {
-        void handleRequest(req, res);
-      })
+      void handleRequest(req, res);
+    })
     : createHttpServer((req, res) => {
-        void handleRequest(req, res);
-      });
+      void handleRequest(req, res);
+    });
 
   async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     // Don't interfere with WebSocket upgrades; ws handles the 'upgrade' event.
@@ -238,6 +239,18 @@ export function createGatewayHttpServer(opts: {
     try {
       const configSnapshot = loadConfig();
       const trustedProxies = configSnapshot.gateway?.trustedProxies ?? [];
+
+      // API Health Check (Deep Health)
+      if (req.url === "/api/health") {
+        const result = opts.healthCheck ? await opts.healthCheck() : null;
+        if (result) {
+          sendJson(res, result.status ?? (result.ok ? 200 : 503), result);
+          return;
+        }
+        sendJson(res, 200, { ok: true, note: "basic-http-check" });
+        return;
+      }
+
       if (await handleHooksRequest(req, res)) return;
       if (
         await handleToolsInvokeHttpRequest(req, res, {
